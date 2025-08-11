@@ -29,9 +29,18 @@ setup: check-deps shell ## Install dependencies into your poetry environment.
 run_admin_app:
 	python -m streamlit run app.py
 
-# Installs dependencies for the admin app.
+# Installs dependencies for the admin app using conda (recommended)
 setup_admin_app:
+	conda env create -f environment.yml
+
+# Alternative: install using pip (requires manual dashscope installation)
+setup_admin_app_pip:
 	pip install .
+	pip install dashscope>=1.24.0
+
+# Alternative: install using poetry
+setup_admin_app_poetry:
+	poetry install
 
 # Linting and formatting below.
 run_mypy:  ## Run mypy
