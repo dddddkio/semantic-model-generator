@@ -22,3 +22,6 @@ dependencies:
 - snowflake-snowpark-python=1.18.0
 - streamlit-extras=0.4.0
 - cattrs=23.1.2
+- pip
+- pip:
+  - dashscope>=1.24.0
