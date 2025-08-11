@@ -29,6 +29,7 @@ from semantic_model_generator.protos.semantic_model_pb2 import Dimension, Table
 from semantic_model_generator.snowflake_utils.env_vars import (  # noqa: E402
     assert_required_env_vars,
 )
+from semantic_model_generator.qwen_utils.qwen_client import qwen_complete
 from semantic_model_generator.snowflake_utils.snowflake_connector import (
     SnowflakeConnector,
     fetch_databases,
@@ -1274,23 +1275,51 @@ def check_valid_session_state_values(vars: list[str]) -> bool:
         return True
 
 
+def run_qwen_complete(
+    model: str,
+    prompt: str,
+    prompt_args: Optional[dict[str, Any]] = None,
+) -> str | None:
+    """
+    使用通义千问替代Cortex Complete功能
+    
+    Args:
+        model: 模型名称（映射到通义千问模型）
+        prompt: 提示词
+        prompt_args: 提示词参数
+        
+    Returns:
+        生成的文本或None
+    """
+    if prompt_args:
+        prompt = prompt.format(**prompt_args)
+    
+    # 模型名称映射
+    qwen_model_map = {
+        "llama3-8b": "qwen-turbo",
+        "mistral-large2": "qwen-plus",
+        "mixtral-8x7b": "qwen-turbo",
+        "llama2-70b-chat": "qwen-plus",
+    }
+    qwen_model = qwen_model_map.get(model, "qwen-turbo")
+    
+    try:
+        return qwen_complete(prompt, model=qwen_model)
+    except Exception:
+        return None
+
+
+# 保留原函数名作为别名，以保持向后兼容
 def run_cortex_complete(
     conn: SnowflakeConnection,
     model: str,
     prompt: str,
     prompt_args: Optional[dict[str, Any]] = None,
 ) -> str | None:
-
-    if prompt_args:
-        prompt = prompt.format(**prompt_args).replace("'", "\\'")
-    complete_sql = f"SELECT snowflake.cortex.complete('{model}', '{prompt}')"
-    response = conn.cursor().execute(complete_sql)
-
-    if response:
-        output: str = response.fetchone()[0]  # type: ignore
-        return output
-    else:
-        return None
+    """
+    已弃用：使用run_qwen_complete替代
+    """
+    return run_qwen_complete(model, prompt, prompt_args)
 
 
 def input_semantic_file_name() -> str:

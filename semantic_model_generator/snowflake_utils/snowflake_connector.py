@@ -12,6 +12,7 @@ from snowflake.connector.errors import ProgrammingError
 from semantic_model_generator.data_processing.data_types import Column, Table
 from semantic_model_generator.snowflake_utils import env_vars
 from semantic_model_generator.snowflake_utils.utils import snowflake_connection
+from semantic_model_generator.qwen_utils.qwen_client import qwen_complete
 
 ConnectionType = TypeVar("ConnectionType")
 # Append this to the end of the auto-generated comments to indicate that the comment was auto-generated.
@@ -93,11 +94,9 @@ def _get_table_comment(
                 conn.cursor()  # type: ignore[union-attr]
                 .execute(f"select get_ddl('table', '{schema_name}.{table_name}');")
                 .fetchall()[0][0]
-                .replace("'", "\\'")
             )
-            comment_prompt = f"Here is a table with below DDL: {tbl_ddl} \nPlease provide a business description for the table. Only return the description without any other text."
-            complete_sql = f"select SNOWFLAKE.CORTEX.COMPLETE('{_autogen_model}', '{comment_prompt}')"
-            cmt = conn.cursor().execute(complete_sql).fetchall()[0][0]  # type: ignore[union-attr]
+            comment_prompt = f"这是一个数据表的DDL结构：{tbl_ddl}\n请为这个表提供一个简洁的业务描述，只返回描述内容，不要其他文字。"
+            cmt = qwen_complete(comment_prompt, model="qwen-turbo")
             return str(cmt + AUTOGEN_TOKEN)
         except Exception as e:
             logger.warning(f"Unable to auto generate table comment: {e}")
@@ -112,14 +111,14 @@ def _get_column_comment(
     else:
         # auto-generate column comment if it is not provided.
         try:
-            comment_prompt = f"""Here is column from table {column_row['TABLE_NAME']}:
-name: {column_row['COLUMN_NAME']};
-type: {column_row['DATA_TYPE']};
-values: {';'.join(column_values) if column_values else ""};
-Please provide a business description for the column. Only return the description without any other text."""
-            comment_prompt = comment_prompt.replace("'", "\\'")
-            complete_sql = f"select SNOWFLAKE.CORTEX.COMPLETE('{_autogen_model}', '{comment_prompt}')"
-            cmt = conn.cursor().execute(complete_sql).fetchall()[0][0]  # type: ignore[union-attr]
+            values_text = ';'.join(column_values) if column_values else "无样例数据"
+            comment_prompt = f"""这是表 {column_row['TABLE_NAME']} 中的一个字段：
+字段名: {column_row['COLUMN_NAME']}
+数据类型: {column_row['DATA_TYPE']}
+样例数据: {values_text}
+
+请为这个字段提供一个简洁的业务描述，只返回描述内容，不要其他文字。"""
+            cmt = qwen_complete(comment_prompt, model="qwen-turbo")
             return str(cmt + AUTOGEN_TOKEN)
         except Exception as e:
             logger.warning(f"Unable to auto generate column comment: {e}")

@@ -159,13 +159,26 @@ def _llm_judge(frame: pd.DataFrame, max_frame_size=200) -> pd.DataFrame:
         table_name, table_type="temporary"
     )
 
-    query = f"""
-    SELECT SNOWFLAKE.CORTEX.COMPLETE('mistral-large2', {col_name}) AS LLM_JUDGE
-    FROM {conn.database}.{conn.schema}.{table_name}
-    """
+    # 使用通义千问替代Cortex Complete进行LLM评判
+    from semantic_model_generator.qwen_utils.qwen_client import qwen_complete
+    
+    # 获取提示词数据
     cursor = conn.cursor()
-    cursor.execute(query)
-    llm_judge_frame = cursor.fetch_pandas_all()
+    cursor.execute(f"SELECT {col_name} FROM {conn.database}.{conn.schema}.{table_name}")
+    prompt_results = cursor.fetchall()
+    
+    # 使用通义千问处理每个提示词
+    llm_judge_results = []
+    for prompt_row in prompt_results:
+        prompt_text = prompt_row[0]
+        try:
+            judge_result = qwen_complete(prompt_text, model="qwen-plus")
+            llm_judge_results.append(judge_result)
+        except Exception as e:
+            llm_judge_results.append(f"评判失败: {str(e)}")
+    
+    # 构建结果DataFrame
+    llm_judge_frame = pd.DataFrame({"LLM_JUDGE": llm_judge_results})
     llm_judge_frame.index = frame.index
 
     reason_filter = re.compile(r"REASON\:([\S\s]*?)ANSWER\:")
